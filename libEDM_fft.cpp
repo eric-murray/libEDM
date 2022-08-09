@@ -4,8 +4,6 @@
 #include <fstream>
 #include <iostream>
 
-#include <itpp/base/math/log_exp.h>
-
 #include <libEDM_fft.h>
 #include <libEDM_library.h>
 #include <libEDM_matlab.h>
