@@ -3,8 +3,6 @@
 #include <complex>
 #include <fstream>
 
-#include <itpp/base/bessel/bessel_internal.h>
-
 #include <libEDM_channels.h>
 #include <libEDM_fft.h>
 #include <libEDM_matrix.h>
