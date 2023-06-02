@@ -1,0 +1,431 @@
+openapi: 3.0.3
+info:
+  title: CAMARA Device Identifier API
+  version: 0.0.3
+  description: |
+    # Summary
+    
+    The Device Identifier API returns details of the mobile device (also know as the UE, or User Equipment) currently being used by a specified mobile subscriber. The following information can be returned:
+     - A unique network identifier for the specific device itself (IMEI SV and IMEI)
+     - A network identifier for the device make and model (IMEI Type Allocation Code)
+     - Device manufacturer name
+     - Device manufacturer model
+     
+     This information can be useful in a number of scenarios, such as the following:
+     - For insurance purposes, to automatically identify a device that a customer wishes to insure
+     - For security / fraud reasons, to establish that a customer is not using a device they claim to have broken or lost
+     - For service delivery reasons, to optimise content for a particular device or OS type
+
+    # Introduction
+
+    Mobile devices are alloacted a unique identity by the manufacturer, known as the International Mobile Equipment Identity, or IMEI. The current software version (SV) of the device can be appended to this, in which case the identifier is known as the IMEI SV. This identity is signalled to the mobile network when the device connects, both to confirm that the device is not blocked, and also allow device dependent network configurations to be implemented.
+    
+    The IMEI is a 15 digit integer, and the IMEI SV is a 16 digit integer:
+    - The first 8 digits are known as the Type Allocation Code (TAC), and identify the manufacturer and model of the device
+    - The following 6 digits are the serial number of the device for that TAC
+    - For IMEI, the remaining digit is a check digit
+    - For IMEI SV, the remaining two digits are the software version
+    
+    TACs are issued and managed by the GSMA, and can be queried using the [GSMA IMEI database](https://www.gsma.com/aboutus/workinggroups/terminal-steering-group/imei-database).
+    
+    The mobile network associates this device identifier with the mobile subscription currently using the device. The mobile subscription is defined by the Subscriber Identity Module (SIM) currently active in the mobile device. This may be a removable SIM or an eSIM. In either case, it is possible for the association between the device identifier and subscription to change - for example, when a physical SIM is transferred to another mobile device.
+    
+    The Device Identifier API allows the API consumer to obtain the IMEI and associated parameters for a specified mobile subscription identifier or equivalent. The mobile subscription can be identified using one of the following subscription identifiers:
+    - the subscription phone number (also known as MSISDN)
+    - the subscription network access identifier, which is a domain specific identifier typically allocated to devices that do not require voice / SMS connectivity
+    - the current IP address and port alloacted to the device, which must be an IPv6 or public IPv4 address
+    
+    The API can be called by an application server or other 3rd party server to establish the identity of the device currently being used by the mobile subscription. The information returned will depend upon the consent that the end user (i.e. mobile subscription owner) has given for that information to be provided to the API consumer. For example, if the end user has not consented to any information about their device being given, then the API consumer will receive an error in reponse to their request. Otherwise, the information that the end user has consented to being given will be returned. 
+    
+    # Relevant terms and definitions
+
+    * **Device Identifier API service endpoint**:
+    The URL pointing to the RESTful resource of the Device Identifier API.
+
+    * **Authentication**:
+    Security access keys such as OAuth 2.0 client credentials used by client applications to invoke the Device Identifier API.
+
+    * **Identifier for the mobile subscription**:
+    At least one identifier for the mobile subscription:
+        - `IP-Address` + `Port`, where `Port` only needs to be specified if `IP-Address` is an IPv4 address
+        - `Phone-Number`
+        - `Network-Access-Identifier`
+    
+      These parameters must be passed as headers for data security and privacy reasons. An example of a valid header would be `"Network-Access-Identifier: 4d596ac1-7822-4927-a3c5-d72e1f922c94@domain.com"`.
+
+    # API functionality
+
+    The API defines a single service endpoint /device-identifier. To call this endpoint, the API consumer must first obtain a valid OAuth2 token from the token endpoint, which is then passed as an Authorization header. The API consumer must also pass at least one of the available mobile subscription identifiers as a header (`Network-Access-Identifier`, `Phone-Number` and/or `IP-Address` + `Port`).
+    
+    If the authentication token is not valid, a `401 UNAUTHENTICATED` error is returned
+    
+    If the mobile subscription parameters contain a formatting error, a `400 INVALID_ARGUMENT` error is returned.
+    
+    If the mobile subscription cannot be identified from the provided parameters, a `404 NOT_FOUND` error is returned.
+    
+    If the end user has not consented to the API consumer getting access to the device identifier information, then a `403 PERMISSION_DENIED` error is returned.
+    
+    Otherwise, a JSON object is returned containing the data the the end user has consented to sharing with the API consumer. An example of this JSON object is as follows:
+    ```
+    {
+       "imeisv": "49015420323751800",
+       "imei": "4901542032375181",
+       "tac": "49015420",
+       "model": "3110",
+       "manufacturer": "Nokia"
+    }
+    ```
+    
+    # Further info and support
+
+    (FAQs will be added in a later version of the documentation)
+  contact:
+    email: sp-dvi@lists.camaraproject.org
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+externalDocs:
+  description: Product documentation at CAMARA
+  url: https://github.com/camaraproject/DeviceIdentifier
+  
+- name: Swagger Editor Validator
+  uses: char0n/swagger-editor-validate@v1.3.2
+
+servers:
+  - url: "{apiRoot}/{basePath}"
+    variables:
+      apiRoot:
+        default: https://localhost:443
+        description: API root
+      basePath:
+        default: dvi/v0
+        description: Base path for the Device Identifier API
+paths:
+  "/device-identifier":
+    get:
+      security:
+        - oAuth2ClientCredentials: []
+      tags:
+        - Get device identifiers
+      summary: Get details about the device being used by a specified mobile subscriber
+      description: Get details about the device being used by a specified mobile subscriber
+      operationId: getDeviceIdentifier
+      parameters:
+        - name: Network-Access-Identifier
+          in: header
+          description: 3GPP network access identifier for the subscription being used by the device
+          example: "4d596ac1-7822-4927-a3c5-d72e1f922c94@domain.com"
+          required: false
+          schema:
+            type: string
+            format: email
+        - name: Phone-Number
+          in: header
+          example: "441234567890"
+          required: false
+          description: MSISDN in E.164 format (starting with country code) of the mobile subscription being used by the device. Optionally prefixed with '+'.
+          schema:
+            type: string
+            pattern: '^\+?[0-9]{5,15}$'
+        - name: IP-Address
+          in: header
+          required: false
+          description: The public IP allocated to the device. If an IPv4 address is specified, the public port must also be specified in the "Port" header
+          examples:
+            ipv4:
+              value: "84.125.93.10"
+            ipv6:
+              value: "2001:db8:85a3:8d3:1319:8a2e:370:7344"
+          schema:
+            type: string
+            format: ipv4/ipv6
+            oneOf:
+              - pattern: '^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])$'
+              - pattern: '^((:|(0?|([1-9a-f][0-9a-f]{0,3}))):)((0?|([1-9a-f][0-9a-f]{0,3})):){0,6}(:|(0?|([1-9a-f][0-9a-f]{0,3})))$'
+        - name: Port
+          in: header
+          required: false
+          description: The public port alloacted to the device. This is only required if an IPv4 public IP is also specified.
+          example: 20000
+          schema:
+            type: integer
+            minimum: 1024
+            maximum: 65535
+
+      responses:
+        "200":
+          description: An device identifier has been found for the specified subscriber
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/200Response'
+
+        "400":
+          $ref: '#/components/responses/400BadRequest'
+        "401":
+          $ref: '#/components/responses/401Unauthorized'
+        "403":
+          $ref: '#/components/responses/403Forbidden'
+        "404":
+          $ref: '#/components/responses/404NotFound'
+        "405":
+          $ref: '#/components/responses/405MethodNotAllowed'
+        "406":
+          $ref: '#/components/responses/406Unacceptable'
+        "429":
+          $ref: '#/components/responses/429TooManyRequests'
+        "500":
+          $ref: '#/components/responses/500InternalServerError'
+        "502":
+          $ref: '#/components/responses/502BadGateway'
+        "503":
+          $ref: '#/components/responses/503ServiceUnavailable'
+        "504":
+          $ref: '#/components/responses/504GatewayTimeout'
+          
+components:
+  securitySchemes:
+    oAuth2ClientCredentials:
+      type: oauth2
+      description: This API uses OAuth 2 with the client credentials grant flow.
+      flows:
+        clientCredentials:
+          tokenUrl: "{tokenUrl}"
+          scopes: {}
+  
+  responses:
+    400BadRequest: 
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          examples:
+            InsufficientHeaders:
+              description: Sufficient headers must be specified to allow the target UE to be identified
+              value:
+                { 
+                  "code": "INVALID_ARGUMENT",
+                  "status": 400,
+                  "message": "Insufficient Headers: At least one of Network-Access-Identifier, Phone-Number or IP-Address must be specified"
+                }
+            MissingPortHeader:
+              description: If IP header specified is an IPv4 address, the Port header must also be specified
+              value:
+                { 
+                  "code": "INVALID_ARGUMENT",
+                  "status": 400,
+                  "message": "Insufficient Headers: Port header must be specified if IP-Address is a public IPv4 address"
+                }
+            InvalidExternalId:
+              value:
+                { 
+                  "code": "INVALID_ARGUMENT",
+                  "status": 400,
+                  "message": "Invalid Header Format: Network-Access-Identifier"
+                }
+            InvalidMSISDN:
+              value:
+                { 
+                  "code": "INVALID_ARGUMENT",
+                  "status": 400,
+                  "message": "Invalid Header Format: Phone-Number"
+                }
+            InvalidIP:
+              description: This error will be returned if the IP address does not have a valid format, or if the IP address is a private IPv4 address
+              value:
+                { 
+                  "code": "INVALID_ARGUMENT",
+                  "status": 400,
+                  "message": "Invalid Header Format: IP-Address"
+                }
+            InvalidPort:
+              value:
+                { 
+                  "code": "OUT_OF_RANGE",
+                  "status": 400,
+                  "message": "Invalid Header Value: Port"
+                }
+    401Unauthorized:
+      description: Unauthorized 
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          examples:
+            InvalidCredentials:
+              value:
+                { 
+                  "code": "UNAUTHENTICATED",
+                  "status": 401, 
+                  "message": "Request not authenticated due to missing, invalid, or expired credentials"
+                }
+
+    403Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          examples:
+            InsufficientPermissions:
+              value:
+                { 
+                  "code": "PERMISSION_DENIED",
+                  "status": 403,
+                  "message": "Client does not have sufficient permissions to perform this action"
+                }
+    
+    404NotFound:
+      description: Subscriber Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          examples:
+            SubscriberNotFound:
+              description: The specified parameters are either inconsistent (if multiple parameters are specified) or not currently associated with any customers of this service
+              value:
+                { 
+                  "code": "NOT_FOUND",
+                  "status": 404,
+                  "message": "No device found for the specified parameters"
+                }
+    
+    405MethodNotAllowed:
+      description: Method Not Allowed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          examples:
+            MethodNotAllowed:
+              description: An HTTP verb other than GET has been used to try and access the resource
+              value:
+                { 
+                  "code": "METHOD_NOT_ALLOWED",
+                  "status": 405,
+                  "message": "The request method is not supported by this resource"
+                }
+    
+    406Unacceptable:
+      description: Not Acceptable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          examples:
+            NotAcceptable:
+              description: A response format other than JSON has been requested
+              value:
+                { 
+                  "code": "NOT_ACCEPTABLE",
+                  "status": 406,
+                  "message": "The server cannot produce a response matching the content requested by the client through Accept-* headers"
+                }
+    
+    429TooManyRequests:
+      description: Too Many Requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          examples:
+            TooManyRequests:
+              description: Access to the API has been temporarily blocked due to quota or spike arrest limits being reached
+              value:
+                { 
+                  "code": "TOO_MANY_REQUESTS",
+                  "status": 429,
+                  "message": "Either out of resource quota or reaching rate limiting"
+                }
+    
+    500InternalServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          example:
+            { 
+              "code": "INTERNAL",
+              "status": 500,
+              "message": "The service is currently not available"
+            }
+
+    502BadGateway:
+      description: Bad Gateway
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          example:
+            { 
+              "code": "BAD_GATEWAY",
+              "status": 502,
+              "message": "The service is currently not available"
+            }
+
+    503ServiceUnavailable:
+      description: Service Unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          example:
+            { 
+              "code": "UNAVAILABLE",
+              "status": 503,
+              "message": "The service is currently not available"
+            }
+        
+    504GatewayTimeout:
+      description: Gateway Time-Out
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          example:
+            { 
+              "code": "TIMEOUT",
+              "status": 504,
+              "message": "The service is currently not available"
+            }
+
+  schemas:
+    200Response:
+      type: object
+      properties:
+        imeisv:
+          type: string
+          description: IMEISV of the device
+          example: "49015420323751800"
+        imei:
+          type: string
+          description: IMEI of the device
+          example: "4901542032375181"
+        tac:
+          type: string
+          description: IMEI TAC of the device
+          example: "49015420"
+        model:
+          type: string
+          description: Model of the device
+          example: "3110"
+        manufacturer:
+          type: string
+          description: Manufacturer of the device
+          example: "Nokia"
+
+    errorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          description: A short, human-readable summary of the problem type
+        status:
+          type: integer
+          description: The HTTP status code
+        message: 
+          type: string
+          description: This parameter appears when there was an error. Human readable explanation specific to this occurrence of the problem
