@@ -1,0 +1,496 @@
+openapi: 3.0.0
+info:
+  title: Aerial Coverage Service
+  version: 0.0.2
+  description: >
+     The Aerial Coverage Service API provides  access to information about the availability and quality of Aerial coverage in specific areas.
+servers:
+  - url: "{apiRoot}/{basePath}/{apiVersion}"
+    variables:
+      apiRoot:
+        description: Environment root
+        enum:
+          - https://naap.eu3.api.vodafone.com
+          - https://staging.naap.eu3.api.vodafone.com
+        default: https://naap.eu3.api.vodafone.com
+      basePath:
+        description: Base path for the Network Authentication API
+        enum:
+          - droneaerialcoverage
+        default: droneaerialcoverage
+      apiVersion:
+        description: API version
+        enum:
+          - v1
+        default: v1
+tags:
+  - name: admins
+    description: Secured Admin-only calls
+security:
+  - oAuthSample: [clientCredentials]
+paths:
+  /getVolumeCoverage:
+    get:
+      summary: Get volume coverage information
+      operationId: getVolumeCoverage
+      parameters:
+        - name: serviceLevel
+          description: Minimum coverage level required, in dBm
+          in: query
+          schema:
+            type: integer
+            minimum: -120
+            maximum: -50
+            default: -80
+
+        - name: connectivityProvider
+          description: Desired connectivity network
+          in: query
+          required: true
+          example: '{ "technology": "CELL_4G", "MCC": 234, "MNC" 15 }'
+          schema:
+            $ref: '#/components/schemas/Cell4GConnectivityProvider'
+
+        - name: volume
+          description: |
+            3D bounding box for coverage area of interest
+            Format is [LL_Lat, LL_Lon, Lowest_Height, UR_Lat, UR_Lon, Highest_Height]
+              LL             : Lower Left in WGS84 degrees
+              UR             : Upper Right in WGS84 degress
+              Lowest_Height  : Lowest height of interest, in metres
+              Highest_Height : Highest height of interest, in metres
+          in: query
+          example: "[ 51.0, 0.0, 0, 52, 1.0, 150 ]"
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CoverageDataRef'
+
+  /downloadCoverageData/{coverageDataRef}:
+    get:
+      summary: Download coverage data
+      operationId: downloadCoverageData
+      parameters:
+        - name: coverageDataRef
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            multipart/mixed:
+              schema:
+                type: object
+                properties:
+                  coverageData:
+                    $ref: '#/components/schemas/CoverageData'
+                  values:
+                    type: string
+                    format: binary
+
+  /analyzeOperationPlan:
+    post:
+      summary: Analyze operation plan for service level
+      operationId: analyzeOperationPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationPlan'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationPlanResult'
+
+  /subscription/subscribe:
+    post:
+      summary: Subscribe to changes in area connectivity coverage
+      operationId: subscribe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionRequest'
+      responses:
+        '200':
+          description: Successful operation
+
+  /subscription/unsubscribe:
+    post:
+      summary: Unsubscribe from changes in area connectivity coverage
+      operationId: unsubscribe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnsubscriptionRequest'
+      responses:
+        '200':
+          description: Successful operation
+
+  /notification/volumeCoverageChanged:
+    post:
+      summary: Notify about changes in volume coverage
+      operationId: volumeCoverageChanged
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VolumeCoverageChangedNotification'
+      responses:
+        '200':
+          description: Successful operation
+
+components:
+  securitySchemes:
+    oAuthSample:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: '/OAuth2ClientCredentialsGrant/v1/token'
+          scopes:
+            AERIAL_COVERAGE_APIGEE_PRODUCT: API Consumer is allowed to consume the aerial coverage of the API
+
+  schemas:
+    CellRadioParameters:
+      type: object
+      properties:
+        technology:
+          $ref: '#/components/schemas/Technology'
+      required:
+        - technology
+
+    Technology:
+      type: string
+      enum:
+        - CELL_4G
+        - CELL_5G
+        # Add more technology options as needed
+        
+    Volume:
+      type: object
+      properties:
+        Id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - square
+            # Add more volume types as needed
+        geometry:
+          $ref: '#/components/schemas/Geometry'
+
+    Geometry:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - Polygon
+            # Add other supported geometry types if needed
+          description: The type of geometry.
+        coordinates:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+            minItems: 2
+            maxItems: 2
+          minItems: 5
+          maxItems: 5
+          description: The coordinates of the bounding box [lattitude, longitude]
+          example: [ [ 51.0, 0.0 ], [ 52.0, 0.0], [ 52.0, 1.0], [51.0, 1.0], [ 51.0, 0.0] ]
+      required:
+        - type
+        - coordinates
+
+    ConnectivityProvider:
+      type: object
+      properties:
+        technology:
+          $ref: '#/components/schemas/Technology'
+
+    Cell4GConnectivityProvider:
+      allOf:
+        - $ref: '#/components/schemas/ConnectivityProvider'
+        - type: object
+          properties:
+            MCC:
+              type: integer
+            MNC:
+              type: integer
+
+    RadioParameters:
+      type: object
+      properties:
+        technology:
+          $ref: '#/components/schemas/Technology'
+        antenna:
+          $ref: '#/components/schemas/PhysicalAntenna'
+
+    CoverageData:
+      type: object
+      properties:
+        latitude:
+          type: number
+          description: Latitude of the upper-left corner of the area covered in WGS84.
+        longitude:
+          type: number
+          description: Longitude of the upper-left corner of the area covered in WGS84.
+        latSize:
+          type: number
+          description: Height of the data structure, in WGS 84 degrees. Typically 1.0.
+        lonSize:
+          type: number
+          description: Width of the data structure, in WGS 84 degrees. Typically 1.0.
+        horizontalResolution:
+          type: integer
+          description: Horizontal resolution of the raster, in arc seconds (WGS 84). Typically 2.
+        verticalResolution:
+          type: integer
+          description: Vertical resolution of the raster, in meters. Typically 15.
+        coverageDataType:
+          $ref: '#/components/schemas/CoverageDataType'
+      required:
+        - latitude
+        - longitude
+        - latSize
+        - lonSize
+        - horizontalResolution
+        - verticalResolution
+        - coverageDataType
+
+    CoverageDataType:
+      type: string
+      enum:
+        - BOOLEAN
+        - NUMERIC
+        # Add more coverage data types as needed
+
+    PhysicalAntenna:
+      type: object
+      properties:
+        type:
+          type: string
+          nullable: true
+        horizontalPattern:
+          type: string
+        verticalPattern:
+          type: string
+        gain:
+          type: number
+        polarization:
+          $ref: '#/components/schemas/Polarization'
+        theta:
+          type: number
+        phi:
+          type: number
+        psi:
+          type: number
+
+    Polarization:
+      type: string
+      enum:
+        - linear
+        - circular
+
+    CoverageDataRef:
+      type: object
+      properties:
+        ref:
+          type: string
+          format: uuid
+          description: Unique reference identifier for the coverage data.
+        volume:
+          $ref: '#/components/schemas/Volume'
+          description: The geographic volume covered by the coverage data.
+      required:
+        - ref
+        - volume
+
+    OperationPlan:
+      type: object
+      properties:
+        gufi:
+          type: string
+          description: A globally unique flight identifier in the form of a UUID.
+        trajectoryElements:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrajectoryElement'
+          description: The positions (locations and orientation in space) that represent the flight route.
+        contingencyPlans:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContingencyPlan'
+          description: Holds information on preplanned contingency situations, especially regarding volumes and when they are used.
+        controllerLocation:
+          $ref: '#/components/schemas/Geometry'
+          description: Location of the controller (e.g., the ground control station).
+        radioParameters:
+          type: array
+          items:
+            $ref: '#/components/schemas/RadioParameters'
+          description: Information about the communication equipment used during the flight.
+      required:
+        - gufi
+        - trajectoryElements
+
+    TrajectoryElement:
+      type: object
+      properties:
+        position:
+          $ref: '#/components/schemas/Position'
+          description: The position (location and orientation) of the aircraft for a specific point along the planned flight trajectory.
+        time:
+          type: string
+          format: date-time
+          description: The timestamp associated with the trajectory element.
+      required:
+        - position
+        - time
+
+    Position:
+      type: object
+      properties:
+        latitude:
+          type: number
+          format: float
+          description: Latitude coordinate of the position.
+        longitude:
+          type: number
+          format: float
+          description: Longitude coordinate of the position.
+        altitude:
+          type: number
+          format: float
+          description: Altitude of the aircraft at the position.
+        orientation:
+          $ref: '#/components/schemas/Orientation'
+          description: Spatial orientation of the aircraft at the position.
+
+    Orientation:
+      type: object
+      properties:
+        roll:
+          type: number
+          format: float
+          description: Roll angle of the aircraft's orientation.
+        pitch:
+          type: number
+          format: float
+          description: Pitch angle of the aircraft's orientation.
+        yaw:
+          type: number
+          format: float
+          description: Yaw angle of the aircraft's orientation.
+
+    ContingencyPlan:
+      type: object
+      properties:
+        contingencyId:
+          type: string
+          format: uuid
+          description: Unique identifier for the contingency plan.
+        volumes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Volume'
+          description: List of volumes associated with the contingency plan.
+        activationTime:
+          type: string
+          format: date-time
+          description: Timestamp indicating when the contingency plan should be activated.
+        deactivationTime:
+          type: string
+          format: date-time
+          description: Timestamp indicating when the contingency plan should be deactivated.
+      required:
+        - contingencyId
+        - volumes
+        - activationTime
+        - deactivationTime
+
+    OperationPlanResult:
+      type: object
+      properties:
+        serviceLevelMet:
+          type: boolean
+        pose:
+          $ref: '#/components/schemas/Pose'
+    Pose:
+      type: object
+      properties:
+        aquisitionDateTime:
+          type: string
+          format: date-time
+        position:
+          $ref: '#/components/schemas/Position'
+        altitude:
+          type: array
+          items:
+            $ref: '#/components/schemas/Altitude'
+        orientation:
+          $ref: '#/components/schemas/Orientation'
+    Altitude:
+      type: number
+
+
+    SubscriptionRequest:
+      type: object
+      properties:
+        areaId:
+          type: string
+          description: The identifier of the area to subscribe to for connectivity coverage changes.
+        callbackUrl:
+          type: string
+          format: uri
+          description: The URL where notifications about connectivity coverage changes will be sent.
+      required:
+        - areaId
+        - callbackUrl
+    UnsubscriptionRequest:
+      type: object
+      properties:
+        subscriptionId:
+          type: string
+          description: The unique identifier of the subscription to be unsubscribed.
+      required:
+        - subscriptionId
+    VolumeCoverageChangedNotification:
+      type: object
+      properties:
+        volume:
+          $ref: '#/components/schemas/Volume'
+          description: The geographic volume for which the coverage has changed.
+        coverageType:
+          type: string
+          description: The type of coverage change (e.g., added, removed, updated).
+        timestamp:
+          type: string
+          format: date-time
+          description: The timestamp when the volume coverage change notification was triggered.
+      required:
+        - volume
+        - coverageType
+        - timestamp
