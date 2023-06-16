@@ -47,7 +47,7 @@ paths:
           description: Desired connectivity network
           in: query
           example: '{ "technology": "CELL_4G", "MCC": 234, "MNC" 15 }'
-          default: '{ "technology": "CELL_4G", "MCC": 234, "MNC" 15 }'
+          required: true
           schema:
             $ref: '#/components/schemas/Cell4GConnectivityProvider'
 
