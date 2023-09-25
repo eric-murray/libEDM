@@ -21,4 +21,4 @@ jobs:
         uses: char0n/swagger-editor-validate@v1.3.2
         with:
           swagger-editor-url: http://localhost/
-          definition-file: *.yml
+          definition-file: main.yml
